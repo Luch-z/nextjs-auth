@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import supabase from "../db/supabase";
 
 export const authOptions = {
     providers: [
@@ -11,20 +12,30 @@ export const authOptions = {
                 password: { label: "Password", type: "password" },
             },
             async authorize(credentials) {
-                const user = {
-                    id: "1",
-                    email: "admin@example.com",
-                    password: "$2b$12$tcyypVSD9KhB0da8wi4MEu5cpWwLQOIOjSBpOCMxyKspLOkEMispa", // Senha "123456" criptografada
-                };
+                const { email, password } = credentials;
 
-                if (
-                    !user ||
-                    !(await bcrypt.compare(credentials.password, user.password))
-                ) {
-                    throw new Error("Invalid credentials");
+                // Verificando se o usuário existe no Supabase
+                const { data: users, error } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("email", email)
+                    .single();
+
+                if (error || !users) {
+                    throw new Error("Usuário não encontrado");
                 }
 
-                return { id: user.id, email: user.email };
+                // Verificando a senha com bcrypt
+                const isPasswordValid = await bcrypt.compare(
+                    password,
+                    users.password
+                );
+
+                if (!isPasswordValid) {
+                    throw new Error("Senha incorreta");
+                }
+
+                return { id: users.id, email: users.email };
             },
         }),
     ],
@@ -43,3 +54,5 @@ export const authOptions = {
         },
     },
 };
+
+export default NextAuth(authOptions);
